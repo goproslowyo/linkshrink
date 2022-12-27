@@ -1,0 +1,4 @@
+imports_granularity = "Crate"
+imports_indent = "Visual"
+indent_style = "Visual"
+reorder_imports = true

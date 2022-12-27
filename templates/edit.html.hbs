@@ -1,0 +1,49 @@
+<html>
+  <head>
+    <title>edit shortlink</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <script>
+      document.addEventListener('DOMContentLoaded', () => { const urlField =
+      document.getElementById('url'); urlField.focus(); });
+    </script>
+  </head>
+  <body>
+    {{#if not saved}}
+      Value of saved var is: "{{saved}}".
+      <h3>Saved shortlink <i>{{keyword}}</i></h3>
+    {{else}}
+      {{log shortlink.keyword}}
+      {{log shortlink.url}}
+      {{log shortlink.private}}
+      {{log shortlink.description}}
+      {{log shortlink.private}}
+      {{#if create}}
+      <h1>Creating new link for {{shortlink.keyword}}</h1>
+      {{else}}
+      <h3>Modifying shortlink <i>{{shortlink.keyword}}</i></h3>
+      {{/if}}
+      <form action="/{{shortlink.keyword}}" method="put">
+        <label for="keyword">* Keyword:</label><br />
+        <input
+          type="text"
+          id="keyword"
+          name="keyword"
+          value="{{shortlink.keyword}}"
+        /><br />
+        <label for="url">* URL:</label><br />
+        <input type="text" id="url" name="url" value="{{shortlink.url}}" /><br />
+        <label for="private">* Private?</label><br />
+        {{#if shortlink.private}}
+        <input type="checkbox" id="private" name="private" checked /><br />
+        {{else}}
+        <input type="checkbox" id="private" name="private" /><br />
+      {{/if}}
+        <label for="description">Description (optional):</label><br />
+        <textarea
+          id="description"
+          name="description">{{shortlink.description}}</textarea><br />
+        <input type="submit" value="Create Shortlink" />
+      </form>
+    {{/if}}
+  </body>
+</html>

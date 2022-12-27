@@ -1,0 +1,16 @@
+<html>
+  <head>
+    <title>list of short links</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  </head>
+  <body>
+    <h1>links</h1>
+    {{#each shortlinks}}
+      <ul>
+        {{#each this index}}
+          {{index}} <li>Key: {{@key}}, Value: {{this}}</li>
+        {{/each}}
+      </ul>
+    {{/each}}
+  </body>
+</html>
