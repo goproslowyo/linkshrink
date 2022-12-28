@@ -4,68 +4,65 @@
     <title>edit shortlink</title>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     {{#if saved}}
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        const urlField = document.getElementById('keyword-box'); urlField.focus();
-        document.activeElement.select();
+      <script>
+        document.addEventListener('DOMContentLoaded', () => {
+          const urlField = document.getElementById('keyword-box');
+          var input = document.getElementById('keyword-box');
+          var protocol = location.protocol;
+          var server = location.hostname;
+          var port = location.port;
+          var newValue = protocol + '//'+ (port ? server + ':' + port : server) + '/' + input.value;
+          input.value = newValue;
+          urlField.focus();
+          document.activeElement.select();
         });
-    </script>
+      </script>
     {{else}}
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        const urlField = document.getElementById('url'); urlField.focus();
+      <script>
+        document.addEventListener('DOMContentLoaded', () => {
+          const urlField =
+          document.getElementById('url'); urlField.focus();
         });
-    </script>
+      </script>
     {{/if}}
   </head>
   <body>
     {{#if saved}}
-      Saved? : {{saved}}
-      Prvte? : {{shortlink.private}}
-      Value of saved var is: "{{saved}}".
       <h3>Saved shortlink <i>{{shortlink.keyword}}</i></h3>
-      <p>We'll redirect🚀 <b>{{shortlink.keyword}}</b> to {{shortlink.url}} for you now.</p>
+      <p>We'll redirect🚀 <b>{{shortlink.keyword}}</b> to {{shortlink.url}} for you now!</p>
       <input type="text" id="keyword-box" name="keyword" value="{{shortlink.keyword}}" /><br />
-      <script>const copyNote = document.createElement("div");
+      <script>
+        document.addEventListener("DOMContentLoaded",
+          function() {
+            setTimeout(function() {
+              const copyNote = document.createElement("div");
               copyNote.innerHTML = "Press Ctrl+C (or Command+C on Mac) to copy";
               copyNote.style.display = "none";
               document.body.appendChild(copyNote);
-              
               function toggleCopyNote() {
-               copyNote.style.display == "block" ? copyNote.style.display = "none" : copyNote.style.display = "block";
+                copyNote.style.display == "block" ? (copyNote.style.display = "none") : (copyNote.style.display = "block");
               }
-
-              document.addEventListener("onload", toggleCopyNote());
+            }, 1000);
+          }
+        );
       </script>
     {{else}}
-      {{log shortlink.keyword}}
-      {{log shortlink.url}}
-      {{log shortlink.private}}
-      {{log shortlink.description}}
-      {{log shortlink.owner}}
       {{#if create}}
-      {{log create}}
-      <h3>Creating new link for <i>{{shortlink.keyword}}</i></h3>
-      <form action="/{{shortlink.keyword}}" method="post">
+        <h3>Creating new link for <i>{{shortlink.keyword}}</i></h3>
       {{else}}
-      <h3>Modifying shortlink <i>{{shortlink.keyword}}</i></h3>
-      <form action="/{{shortlink.keyword}}/update" method="post">
+        <h3>Modifying shortlink <i>{{shortlink.keyword}}</i></h3>
       {{/if}}
+      <form action="/edit/{{shortlink.keyword}}" method="post">
         <label for="keyword">* Keyword:</label><br />
-        <input
-          type="text"
-          id="keyword"
-          name="keyword"
-          value="{{shortlink.keyword}}"
-        /><br />
+        <input type="text" id="keyword" name="keyword" value="{{shortlink.keyword}}" /><br />
         <label for="url">* URL:</label><br />
-        <input type="text" id="url" name="url" value="{{shortlink.url}}" /><br />
+        <input type="text" id="url" name="url" value="{{shortlink.url}}" /><br/>
         <label for="private">* Private?</label><br />
         {{#if shortlink.private}}
-        <input type="checkbox" id="private" name="private" value="true" checked /><br />
+          <input type="checkbox" id="private" name="private" value="true" checked /><br />
         {{else}}
-        <input type="checkbox" id="private" name="private" value="true" /><br />
-      {{/if}}
+          <input type="checkbox" id="private" name="private" value="true" /><br/>
+        {{/if}}
         <label for="owner">Owner:</label><br />
         <input type="text" id="owner" name="owner" value="{{shortlink.owner}}" /><br />
         <label for="description">Description (optional):</label><br />
@@ -73,9 +70,9 @@
           id="description"
           name="description">{{shortlink.description}}</textarea><br />
         {{#if create}}
-        <input type="submit" value="Create Shortlink" />
+          <input type="submit" value="Create Shortlink" />
         {{else}}
-        <input type="submit" value="Modify Shortlink" />
+          <input type="submit" value="Modify Shortlink" />
         {{/if}}
       </form>
     {{/if}}

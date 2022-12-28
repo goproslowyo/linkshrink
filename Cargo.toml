@@ -6,11 +6,22 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1"
+thiserror = "1"
 rand = "0.8.5"
 redis = "0.22.1"
-rocket = { version = "0.5.0-rc.2", features = ["json"] }
-rocket_dyn_templates = { version = "0.1.0-rc.2", features = ["handlebars"] }
+redis-async = "0.14"
+lockfree = "0.5"
+futures = "0.3"
+handlebars = { version = "4", features = ["dir_source"] }
+maplit = "1.0.2"
+axum = { version = "0.6", features = ["macros", "form"] }
+axum-template = { version = "0.11.0", features = ["handlebars"] }
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.91"
 serde_urlencoded = "0.7.1"
+tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.2.2", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tap = "1"

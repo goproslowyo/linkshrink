@@ -6,11 +6,14 @@
   <body>
     <h1>links</h1>
     {{#each shortlinks}}
-      <ul>
-        {{#each this index}}
-          {{index}} <li>Key: {{@key}}, Value: {{this}}</li>
-        {{/each}}
-      </ul>
+      {{#unless this.private}}
+        <ul>
+          {{#each this index}}
+            {{index}}
+            <li>Key: {{@key}}, Value: {{this}}</li>
+          {{/each}}
+        </ul>
+      {{/unless}}
     {{/each}}
   </body>
 </html>
