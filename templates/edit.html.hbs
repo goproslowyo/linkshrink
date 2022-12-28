@@ -1,28 +1,56 @@
+<!DOCTYPE html>
 <html>
   <head>
     <title>edit shortlink</title>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    {{#if saved}}
     <script>
-      document.addEventListener('DOMContentLoaded', () => { const urlField =
-      document.getElementById('url'); urlField.focus(); });
+      document.addEventListener('DOMContentLoaded', () => {
+        const urlField = document.getElementById('keyword-box'); urlField.focus();
+        document.activeElement.select();
+        });
     </script>
+    {{else}}
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const urlField = document.getElementById('url'); urlField.focus();
+        });
+    </script>
+    {{/if}}
   </head>
   <body>
-    {{#if not saved}}
+    {{#if saved}}
+      Saved? : {{saved}}
+      Prvte? : {{shortlink.private}}
       Value of saved var is: "{{saved}}".
-      <h3>Saved shortlink <i>{{keyword}}</i></h3>
+      <h3>Saved shortlink <i>{{shortlink.keyword}}</i></h3>
+      <p>We'll redirect🚀 <b>{{shortlink.keyword}}</b> to {{shortlink.url}} for you now.</p>
+      <input type="text" id="keyword-box" name="keyword" value="{{shortlink.keyword}}" /><br />
+      <script>const copyNote = document.createElement("div");
+              copyNote.innerHTML = "Press Ctrl+C (or Command+C on Mac) to copy";
+              copyNote.style.display = "none";
+              document.body.appendChild(copyNote);
+              
+              function toggleCopyNote() {
+               copyNote.style.display == "block" ? copyNote.style.display = "none" : copyNote.style.display = "block";
+              }
+
+              document.addEventListener("onload", toggleCopyNote());
+      </script>
     {{else}}
       {{log shortlink.keyword}}
       {{log shortlink.url}}
       {{log shortlink.private}}
       {{log shortlink.description}}
-      {{log shortlink.private}}
+      {{log shortlink.owner}}
       {{#if create}}
-      <h1>Creating new link for {{shortlink.keyword}}</h1>
+      {{log create}}
+      <h3>Creating new link for <i>{{shortlink.keyword}}</i></h3>
+      <form action="/{{shortlink.keyword}}" method="post">
       {{else}}
       <h3>Modifying shortlink <i>{{shortlink.keyword}}</i></h3>
+      <form action="/{{shortlink.keyword}}/update" method="post">
       {{/if}}
-      <form action="/{{shortlink.keyword}}" method="put">
         <label for="keyword">* Keyword:</label><br />
         <input
           type="text"
@@ -34,15 +62,21 @@
         <input type="text" id="url" name="url" value="{{shortlink.url}}" /><br />
         <label for="private">* Private?</label><br />
         {{#if shortlink.private}}
-        <input type="checkbox" id="private" name="private" checked /><br />
+        <input type="checkbox" id="private" name="private" value="true" checked /><br />
         {{else}}
-        <input type="checkbox" id="private" name="private" /><br />
+        <input type="checkbox" id="private" name="private" value="true" /><br />
       {{/if}}
+        <label for="owner">Owner:</label><br />
+        <input type="text" id="owner" name="owner" value="{{shortlink.owner}}" /><br />
         <label for="description">Description (optional):</label><br />
         <textarea
           id="description"
           name="description">{{shortlink.description}}</textarea><br />
+        {{#if create}}
         <input type="submit" value="Create Shortlink" />
+        {{else}}
+        <input type="submit" value="Modify Shortlink" />
+        {{/if}}
       </form>
     {{/if}}
   </body>

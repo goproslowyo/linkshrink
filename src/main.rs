@@ -14,17 +14,20 @@ use serde::{Deserialize, Serialize};
 // Global variable to store the redis connection url
 const REDIS_URL: &str = "redis://localhost";
 
+/// Get a redis database connection
 fn get_redis_connection(url: String) -> Connection {
     let client = Client::open(url).unwrap();
     client.get_connection().unwrap()
 }
 
+/// get a shortlink
 fn get_shortlink(mut con: &mut Connection, keyword: &str) -> Result<Shortlink, redis::RedisError> {
     let serialized: String = redis::cmd("GET").arg(keyword).query(&mut con)?;
     let shortlink: Shortlink = serde_json::from_str(&serialized).unwrap();
     Ok(shortlink)
 }
 
+/// get all shortlinks
 fn get_all_shortlinks(mut con: &mut Connection) -> Result<Shortlinks, redis::RedisError> {
     let keys: Vec<String> = redis::cmd("KEYS").arg("*").query(&mut con)?;
     let mut shortlinks = Vec::new();
@@ -36,6 +39,7 @@ fn get_all_shortlinks(mut con: &mut Connection) -> Result<Shortlinks, redis::Red
     Ok(shortlinks)
 }
 
+/// save a shortlink
 fn store_shortlink(mut con: &mut Connection,
                    shortlink: &Shortlink)
                    -> Result<(), redis::RedisError> {
@@ -46,6 +50,7 @@ fn store_shortlink(mut con: &mut Connection,
     Ok(())
 }
 
+///save multiple shortlinks
 fn store_shortlinks(mut con: &mut Connection,
                     shortlinks: &Shortlinks)
                     -> Result<(), redis::RedisError> {
@@ -58,45 +63,52 @@ fn store_shortlinks(mut con: &mut Connection,
     Ok(())
 }
 
-// Define a vector to contain a list of shortlinks
+/// A vector to contain a list of shortlinks
 type Shortlinks = Vec<Shortlink>;
 
-// A simple struct to represent a shortlink
-#[derive(Default, Serialize, Deserialize)]
+/// A simple struct to represent a shortlink
+#[derive(Default, Serialize, Deserialize, Debug)]
 struct Shortlink {
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    id: String,
+    id: Option<String>,
     keyword: String,
     url: String,
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    hits: usize,
-    // #[serde(skip_serializing_if = "Option::is_none")]
+    hits: Option<usize>,
+    #[serde(default)]
     private: bool,
-    // #[serde(skip_serializing_if = "Option::is_none")]
     owner: String,
-    // #[serde(skip_serializing_if = "Option::is_none")]
     description: String,
 }
 
-// Implement a method to generate a unique short uuid
+/// Implements a method to generate a unique short uuid
 impl Shortlink {
     fn generate_id(&mut self) {
-        self.id = uuid::Uuid::new_v4().to_string();
+        self.id = Some(uuid::Uuid::new_v4().to_string());
     }
 }
+/// Implement the Debug trait for the Shortlink struct
+// #[derive(debug)]
+// impl std::fmt::Debug for Shortlink {
+//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//         write!(f, "Shortlink {{ id: {:?}, keyword: {}, url: {}, hits: {:?}, description: {:?}, private: {:?}, owner: {:?} }}", self.id, self.keyword, self.url, self.hits, self.description, self.private, self.owner)
+//     }
+// }
 
-// Implement the Debug trait for the Shortlink struct
-impl std::fmt::Debug for Shortlink {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Shortlink {{ id: {:?}, keyword: {}, url: {}, hits: {:?}, description: {:?}, private: {:?}, owner: {:?} }}", self.id, self.keyword, self.url, self.hits, self.description, self.private, self.owner)
-    }
-}
-
-// Write a function to implement the hit counter in redis of a link
+/// Write a function to implement the hit counter in redis of a link
 fn hit(con: &mut Connection, keyword: &str) {
     let mut shortlink = get_shortlink(con, keyword).unwrap();
-    shortlink.hits += 1;
+    let hits = shortlink.hits.get_or_insert(0);
+    *hits += 1;
     store_shortlink(con, &shortlink).unwrap();
+}
+
+fn default_shortlink(keyword: String) -> Shortlink {
+    Shortlink { id: Some(uuid::Uuid::new_v4().to_string()),
+                keyword,
+                url: String::from(""),
+                hits: Some(0),
+                private: false,
+                owner: String::from("admin"),
+                description: String::from("") }
 }
 
 #[get("/")]
@@ -119,58 +131,82 @@ fn get_keywords() -> Template {
 
 #[get("/edit/<keyword>")]
 fn edit_keyword(keyword: String) -> Template {
+    println!("Someone wants to edit the keyword: {keyword}");
     let mut con = get_redis_connection(REDIS_URL.to_string());
-    let shortlink = get_shortlink(&mut con, &keyword).unwrap_or(default_shortlink(keyword));
-    let mut context = context! {
-        create: true,
+    let shortlink: Shortlink =
+        get_shortlink(&mut con, &keyword).unwrap_or(default_shortlink(keyword));
+    println!("Shortlink Object: {shortlink:#?}");
+    let mut create = false;
+    if shortlink.url.is_empty() {
+        println!("Shortlink {} has an empty URL, so it's probably new...",
+                 shortlink.keyword);
+        create = true;
+    };
+    let context = context! {
+        create: create,
         shortlink: &shortlink,
     };
-    if keyword == shortlink.keyword {
-        context.create = false;
-    };
-    println!("{sholrtlink:?}");
+    println!("{shortlink:#?}");
     Template::render("edit", &context)
-}
-
-fn default_shortlink(keyword: String) -> Shortlink {
-    Shortlink {
-        id: keyword,
-        keyword: String::from(""),
-        url: String::from(""),
-        hits: 0,
-        private: false,
-        owner: String::from(""),
-        description: String::from(""),
-    }
 }
 
 #[post("/<keyword>",
        format = "application/x-www-form-urlencoded",
        data = "<body>",
        rank = 2)]
-fn save_keyword(keyword: String, body: &str) -> Template {
+fn new_keyword(keyword: &str, body: &str) -> Template {
+    println!("Someone wants to create shortlink {keyword}.");
     let mut con = get_redis_connection(REDIS_URL.to_string());
     // Serialize the body to a struct
-    let body: Shortlink = serde_urlencoded::from_str(body).unwrap_or(default_shortlink(keyword));
-    // Check if keyword exists and if so update the modified fields
-    let mut shortlink = get_shortlink(&mut con, &keyword).unwrap();
-    if keyword == shortlink.keyword {
-        shortlink.url = body.url;
-        shortlink.private = body.private;
-        shortlink.description = body.description;
-        shortlink.owner = body.owner;
-    } else {
-        shortlink.generate_id();
-        shortlink.keyword = body.keyword;
-        shortlink.url = body.url;
-        shortlink.private = body.private;
-        shortlink.description = body.description;
+    let mut shortlink: Shortlink = serde_urlencoded::from_str(body).unwrap();
+    println!("Received deserialized body: {shortlink:#?}");
+    shortlink.keyword = keyword.to_string();
+    shortlink.generate_id();
+    println!("Updated ID deserialized body: {shortlink:#?}");
+    //     Some(p) if p == "on" => Some("true".to_string()),
+    //     _ => Some("".to_string()),
+    // };
+    store_shortlink(&mut con, &shortlink).unwrap();
+    let ctx = context! {
+        saved: "true",
+        shortlink,
+    };
+    Template::render("edit", &ctx)
+}
+
+#[post("/<keyword>/update",
+       format = "application/x-www-form-urlencoded",
+       data = "<body>",
+       rank = 1)]
+fn update_keyword(keyword: String, body: &str) -> Template {
+    println!("Someone wants to update the keyword: {keyword}, with body: {body}");
+    // Serialize the body to a struct
+    let new_shortlink: Shortlink = serde_urlencoded::from_str(body).unwrap();
+    // Get the existing shortlink from the database
+    let mut con = get_redis_connection(REDIS_URL.to_string());
+    let mut shortlink = get_shortlink(&mut con, &new_shortlink.keyword).unwrap();
+    println!("Would like to update retrieved DB entry: {shortlink:#?}");
+    println!("With {new_shortlink:#?}");
+
+    // Update the old with the new values from the body
+    shortlink.url = new_shortlink.url;
+    shortlink.private = new_shortlink.private;
+    //     Some(p) if p == "on" => true,
+    //     _ => false,
+    // };
+    shortlink.owner = new_shortlink.owner;
+    shortlink.description = new_shortlink.description;
+
+    // Store the updated shortlink in the database
+    let save = store_shortlink(&mut con, &shortlink);
+    match save {
+        Ok(_) => println!("Saved {shortlink:#?}"),
+        Err(e) => println!("Error saving {shortlink:#?}: {e:?}"),
     }
     store_shortlink(&mut con, &shortlink).unwrap();
     let ctx = context! {
         saved: "true",
-        keyword: shortlink.keyword,
-        url: shortlink.url,
+        shortlink,
     };
     Template::render("edit", &ctx)
 }
@@ -192,18 +228,20 @@ fn save_keyword(keyword: String, body: &str) -> Template {
 //     }
 // }
 
-#[get("/<keyword>", rank = 1)]
+#[get("/<keyword>", rank = 3)]
 fn get_keyword(keyword: String) -> (Status, Redirect) {
-    format!("Looking to get keyword {keyword}");
+    println!("Looking to get keyword {keyword}");
     // Get the keyword from the database or redirect to the edit page
     let mut con = get_redis_connection(REDIS_URL.to_string());
     let shortlink = get_shortlink(&mut con, &keyword);
     if let Ok(shortlink) = shortlink {
+        println!("Keyword {keyword} exists, 🚀 {:?} !", shortlink.url);
         hit(&mut con, &keyword);
         let url = shortlink.url;
         let redirect = Redirect::temporary(url);
         (Status::TemporaryRedirect, redirect)
     } else {
+        println!("Doesn't exist, redirecting to /edit/{keyword} to create...");
         let redirect = Redirect::temporary(format!("/edit/{keyword}"));
         (Status::TemporaryRedirect, redirect)
     }
@@ -221,5 +259,9 @@ fn rocket() -> _ {
                    .mount("/", routes![favicon])
                    .mount("/", routes![index])
                    .mount("/",
-                          routes![get_keywords, get_keyword, edit_keyword, save_keyword])
+                          routes![get_keywords,
+                                  get_keyword,
+                                  edit_keyword,
+                                  new_keyword,
+                                  update_keyword])
 }
