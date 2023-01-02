@@ -15,7 +15,7 @@ use redis_async::{client,
 use serde::Serialize;
 use tap::TapFallible;
 use thiserror::Error;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, instrument, trace};
 
 pub type TemplateEngine = Engine<Handlebars<'static>>;
 pub type RedisConnection = Arc<PairedConnection>;
@@ -44,6 +44,7 @@ impl AppState {
                                               .map_err(|_| DatabaseError::UnableToConnect)?;
 
         let mut handlebars = Handlebars::default();
+        handlebars.set_dev_mode(false);
         handlebars.register_templates_directory(".html.hbs", "templates/")
                   .tap_err(|err| error!("Failed to register handlebar templates: {err:#?}"))
                   .expect("Failed to register handlebar templates");
@@ -57,14 +58,13 @@ impl AppState {
 
         tokio::spawn(async move {
             loop {
-                debug!("Flushing shortlink hits from cache to redis.");
+                trace!("Flushing shortlink hits from cache to redis.");
 
                 match (weak_cache.upgrade(), weak_connection.upgrade()) {
                     (Some(strong_cache), Some(strong_connection)) => {
                         let shortlink_values =
-                            strong_cache.iter().filter_map(|entry| {
-                                                   entry.val().set_key_in_redis().ok()
-                                               });
+                            strong_cache.iter()
+                                        .filter_map(|entry| entry.val().set_key_in_redis().ok());
 
                         for shortlink_value in shortlink_values {
                             // todo: update this to use streams buffered unordered
@@ -72,7 +72,7 @@ impl AppState {
                         }
                     }
                     _ => {
-                        info!("Cache or redis connection dropped. Background flush ending...");
+                        debug!("Cache or redis connection dropped. Background flush ending...");
                         break;
                     }
                 }
@@ -92,7 +92,7 @@ impl AppState {
                                     .await
                                     .map_err(|_| DatabaseError::FailedToQueryRedis)?;
 
-        info!(keys_found = keys.len());
+        debug!(keys_found = keys.len());
 
         if keys.is_empty() {
             return Ok(vec![]);
@@ -128,7 +128,7 @@ impl AppState {
     /// get a shortlink
     pub async fn get_shortlink(&self, keyword: &str) -> Result<Option<Shortlink>, DatabaseError> {
         if let Some(value) = self.cache.get(keyword) {
-            info!("Fetched from cache.");
+            debug!("Fetched from cache.");
             return Ok(Some(value.val().clone()));
         }
 
@@ -138,7 +138,7 @@ impl AppState {
                         .map_err(|_| DatabaseError::FailedToQueryRedis)?;
 
         if let Some(shortlink) = &entry {
-            info!("Entry set into cache");
+            debug!("Entry set into cache");
             self.cache.insert(keyword.to_string(), shortlink.clone());
         }
 
@@ -158,7 +158,7 @@ impl AppState {
     /// save a shortlink
     pub async fn store_shortlink(&self, mut shortlink: Shortlink) -> Result<(), DatabaseError> {
         if let Some(existing_cache) = self.cache.get(&shortlink.keyword) {
-            info!("Shortlink found in cache");
+            debug!("Shortlink found in cache");
             shortlink.hits = existing_cache.val().hits;
         }
 

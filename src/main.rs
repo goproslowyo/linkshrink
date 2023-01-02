@@ -5,10 +5,12 @@ mod models;
 use error::AppResult;
 
 use axum::{extract::{Path, State},
-           http::StatusCode,
+           http::{header::HeaderMap, StatusCode},
            response::{IntoResponse, Redirect},
            routing::{get, post},
            Form, Router, Server};
+
+use axum_prometheus::PrometheusMetricLayer;
 
 use axum_template::RenderHtml;
 
@@ -16,16 +18,32 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::database::AppState;
-use tracing::instrument;
+use tracing::{debug, instrument};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    tracing_subscriber::registry().with(tracing_subscriber::EnvFilter::from_default_env())
+    let redis_host = &std::env::var("LINKSHRINK_REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let redis_port = std::env::var("LINKSHRINK_REDIS_PORT")
+                             .unwrap_or_else(|_| "6379".to_string())
+                             .parse::<u16>()
+                             .unwrap_or(6379);
+
+    let listen_host = &std::env::var("LINKSHRINK_LISTEN_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let listen_port = std::env::var("LINKSHRINK_LISTEN_PORT")
+                             .unwrap_or_else(|_| "8080".to_string())
+                             .parse::<u16>()
+                             .unwrap_or(8080);
+
+    tracing_subscriber::registry().with(tracing_subscriber::EnvFilter::from_default_env()
+                                  .add_directive("handlebars=info".parse().unwrap())
+                                  .add_directive("hyper=info".parse().unwrap()))
                                   .with(tracing_subscriber::fmt::layer())
                                   .init();
+    let (prom_layer, metrics_handler) = PrometheusMetricLayer::pair();
 
-    let database = AppState::new("0.0.0.0", 6379).await?;
+    let database = AppState::new(redis_host, redis_port).await?;
 
     let app = Router::new().route("/", get(root))
                            .route("/favicon.ico", get(favicon))
@@ -33,9 +51,11 @@ async fn main() -> AppResult<()> {
                            .route("/edit/:keyword", get(edit_keyword))
                            .route("/edit/:keyword", post(update_keyword))
                            .route("/:keyword", get(get_keyword))
+                           .route("/metrics", get(|| async move { metrics_handler.render() }))
+                           .layer(prom_layer)
                            .with_state(database);
 
-    Server::bind(&"0.0.0.0:8080".parse().unwrap()).serve(app.into_make_service())
+    Server::bind(&format!("{listen_host}:{listen_port}").parse().unwrap()).serve(app.into_make_service())
                                                   .await
                                                   .unwrap();
 
@@ -43,8 +63,16 @@ async fn main() -> AppResult<()> {
 }
 
 #[instrument]
-async fn root() -> impl IntoResponse {
-    "hello, world"
+async fn root(headers: HeaderMap) -> impl IntoResponse {
+    let addr = headers.get("X-Real-IP")
+                      .or_else(|| headers.get("X-Forwarded-For"))
+                      .and_then(|ip| ip.to_str().ok())
+                      .unwrap_or("unknown");
+    let user_agent = headers.get("User-Agent")
+                            .and_then(|ua| ua.to_str().ok())
+                            .unwrap_or("User agent unknown");
+
+    format!("hello, {addr}.\n\nUA:{user_agent}.\n\n\nHeaders Map: {headers:#?}")
 }
 
 #[instrument]
@@ -69,6 +97,7 @@ async fn edit_keyword(State(state): State<AppState>,
     let mut shortlink = state.get_shortlink(&keyword).await?.unwrap_or_default();
 
     shortlink.keyword = keyword;
+    debug!("edit shortlink: {:?}", shortlink.keyword);
 
     Ok(RenderHtml("edit",
                   state.get_engine(),
