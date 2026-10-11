@@ -1,0 +1,27 @@
+:root { --bg: #fff; --fg: #1d1d1f; --muted: #6b6b70; --line: #e3e3e6; --accent: #2457c5; --ok: #1f7a3a; --err: #b42318; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { :root { --bg: #151517; --fg: #ececef; --muted: #9a9aa2; --line: #2c2c31; --accent: #8fb0ff; --ok: #6fd08f; --err: #ff8a80; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid var(--line); }
+main { max-width: 64rem; margin: 0 auto; padding: 1rem; }
+a { color: var(--accent); }
+.brand { font-weight: 700; font-size: 1.25rem; text-decoration: none; }
+.who, .muted, .hint { color: var(--muted); font-size: .9rem; }
+.row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .5rem 0; }
+label { display: block; margin-top: .75rem; }
+.row label { margin: 0; }
+input, textarea, button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: .4rem .6rem; }
+input[type=checkbox] { width: auto; }
+form > input, textarea { width: 100%; }
+textarea { min-height: 4rem; }
+button { cursor: pointer; border-color: var(--accent); }
+button.danger { border-color: var(--err); color: var(--err); }
+.check { display: flex; gap: .5rem; align-items: center; }
+table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.num { text-align: right; }
+.url { word-break: break-all; font-size: .9rem; }
+.tag { font-size: .75rem; border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; color: var(--muted); }
+.ok { color: var(--ok); } .err { color: var(--err); }
+code { font-size: .9em; }
+@media (max-width: 40rem) { thead { display: none; } td { display: block; border: 0; padding: .1rem 0; } tr { display: block; border-bottom: 1px solid var(--line); padding: .5rem 0; } .num { text-align: left; } }

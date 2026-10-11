@@ -1,17 +1,9 @@
 # Link Shrink
 
-## Dependencies
+go/ links. By d0nut and goproslowyo (2022-23); rewritten for kvm-vps in 2026. How it works, building, deploying,
+backup and restore: [../README.md](../README.md).
 
-Install clippy for warnings.
-
-Cargo watch for autobuild on code changes.
-
-Rocket requires dev or nightly toolchain.
-
-Also needs redis, just launch the docker-compose file with `docker-compose up -d`.
-
-## Running 
-
-```shell
-$ RUST_BACKTRACE=1 cargo watch -x run -x clippy
+```sh
+cargo test                     # unit + router tests
+cargo clippy --all-targets -- -D warnings
 ```

@@ -1,28 +1,28 @@
 [package]
 name = "linkshrink"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.85"
+description = "go/ links: keyword -> URL redirects behind the Kanidm gate"
 
 [dependencies]
-anyhow = "1"
-axum = { version = "0.6", features = ["macros", "form"] }
-axum-prometheus = "0.2.0"
-axum-template = { version = "0.11.0", features = ["handlebars"] }
-futures = "0.3"
-handlebars = { version = "4", features = ["dir_source"] }
-lockfree = "0.5"
-maplit = "1.0.2"
-rand = "0.8.5"
-redis = "0.22.1"
-redis-async = "0.14"
-serde = { version = "1.0.152", features = ["derive"] }
-serde_json = "1.0.91"
-serde_urlencoded = "0.7.1"
-tap = "1"
-thiserror = "1"
-tokio = { version = "1", features = ["full"] }
+arc-swap = "1"
+askama = "0.16"
+axum = { version = "0.8", default-features = false, features = ["form", "http1", "query", "tokio"] }
+mimalloc = { version = "0.1", default-features = false }
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+subtle = "2"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1.2.2", features = ["v4"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "std"] }
+url = "2"
+
+[dev-dependencies]
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+strip = true

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block who %}<span class="who">{{ user.name }}{% if user.admin %} · admin{% endif %} · <a href="/logout">sign out</a></span>{% endblock %}
+{% block content %}
+<form class="row" action="/edit" method="get">
+  <label for="new">New link: go/</label>
+  <input id="new" name="keyword" placeholder="keyword" autocomplete="off" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}">
+  <button>Create</button>
+</form>
+<form class="row" action="/" method="get">
+  <label for="q">Find</label>
+  <input id="q" name="q" value="{{ filter }}" placeholder="keyword, words, URL or owner">
+  <button>Search</button>
+  {% if !filter.is_empty() %}<a href="/">clear</a>{% endif %}
+</form>
+<p class="muted">{{ rows.len() }} of {{ total }} links. Type <code>go/keyword</code> in your browser; anything after a slash is passed on (<code>go/gh/some/repo</code>).</p>
+<table>
+  <thead><tr><th>Link</th><th>Goes to</th><th>Owner</th><th class="num">Hits</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td><a href="/{{ r.keyword }}">go/{{ r.keyword }}</a>{% if r.private %} <span class="tag">unlisted</span>{% endif %}
+      {% if !r.description.is_empty() %}<div class="muted">{{ r.description }}</div>{% endif %}</td>
+    <td class="url">{{ r.url }}</td>
+    <td>{{ r.owner }}{% if r.mine || user.admin %} · <a href="/edit/{{ r.keyword }}">edit</a>{% endif %}</td>
+    <td class="num">{{ r.hits }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
