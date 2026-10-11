@@ -1,6 +1,6 @@
 [package]
 name = "linkshrink"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 rust-version = "1.85"
 description = "go/ links: keyword -> URL redirects behind the Kanidm gate"
@@ -9,6 +9,7 @@ description = "go/ links: keyword -> URL redirects behind the Kanidm gate"
 arc-swap = "1"
 askama = "0.16"
 axum = { version = "0.8", default-features = false, features = ["form", "http1", "json", "query", "tokio"] }
+percent-encoding = "2"
 mimalloc = { version = "0.1", default-features = false }
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

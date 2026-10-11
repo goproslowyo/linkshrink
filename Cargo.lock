@@ -514,13 +514,14 @@ dependencies = [
 
 [[package]]
 name = "linkshrink"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "arc-swap",
  "askama",
  "axum",
  "http-body-util",
  "mimalloc",
+ "percent-encoding",
  "rusqlite",
  "serde",
  "serde_json",

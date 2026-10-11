@@ -133,6 +133,20 @@ pub fn expand(url: &str, rest: &str, query: Option<&str>) -> String {
     out
 }
 
+/// Characters a decoded rest-of-path must not carry raw into a Location header (`/` stays a separator).
+const REST_ESCAPE: &percent_encoding::AsciiSet =
+    &percent_encoding::CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`').add(b'#').add(b'?').add(b'{').add(b'}');
+
+/// What someone typed into a search shortcut, decoded: (name, rest of the path re-escaped, query).
+fn typed(raw: &str) -> (String, String, Option<String>) {
+    let text = percent_encoding::percent_decode_str(raw).decode_utf8_lossy();
+    let text = text.trim();
+    let (path, query) = text.split_once('?').map_or((text, None), |(p, q)| (p, Some(q.to_string())));
+    let (name, rest) = path.split_once(['/', ' ']).unwrap_or((path, ""));
+    let rest = rest.trim();
+    (name.to_string(), percent_encoding::utf8_percent_encode(rest, REST_ESCAPE).to_string(), query)
+}
+
 fn redirect(status: StatusCode, location: &str) -> Response {
     match HeaderValue::from_str(location) {
         Ok(v) => (status, [(LOCATION, v)]).into_response(),
@@ -146,7 +160,18 @@ async fn go(State(state): State<AppState>, _user: User, method: Method, uri: Uri
         return StatusCode::METHOD_NOT_ALLOWED.into_response();
     }
     let path = uri.path().trim_start_matches('/');
-    let (keyword, rest) = path.split_once('/').unwrap_or((path, ""));
+    let (first, _) = path.split_once('/').unwrap_or((path, ""));
+    // A browser search shortcut (`go` -> https://go.wupinyin.co.uk/%s) encodes what was typed, so `go git/infra/x?y=1`
+    // arrives as /git%2Finfra%2Fx%3Fy%3D1. When the name itself is encoded, decode the whole thing once and split it
+    // again (the first space also ends the name: `go w kanidm reauth` searches "kanidm reauth"). Plain paths never take this branch.
+    let decoded;
+    let (keyword, rest, query) = if first.contains('%') {
+        decoded = typed(path);
+        (decoded.0.as_str(), decoded.1.as_str(), decoded.2.as_deref().or(uri.query()))
+    } else {
+        let (k, r) = path.split_once('/').unwrap_or((path, ""));
+        (k, r, uri.query())
+    };
     let Some(keyword) = normalize(keyword) else {
         return page(StatusCode::NOT_FOUND, &Message { title: "Not a name", body: BAD_NAME });
     };
@@ -154,7 +179,7 @@ async fn go(State(state): State<AppState>, _user: User, method: Method, uri: Uri
         Some(entry) => {
             entry.hit();
             metrics::REDIRECTS.inc();
-            redirect(StatusCode::TEMPORARY_REDIRECT, &expand(&entry.link.url, rest, uri.query()))
+            redirect(StatusCode::TEMPORARY_REDIRECT, &expand(&entry.link.url, rest, query))
         }
         None => {
             metrics::MISSES.inc();
@@ -994,6 +1019,26 @@ mod tests {
         assert_eq!(s, StatusCode::OK);
         assert!(body.contains("linkshrink_redirects_total"));
         let _ = (std::fs::remove_dir_all(d1), std::fs::remove_dir_all(d2));
+    }
+
+    #[tokio::test]
+    async fn search_shortcut_paths_are_decoded() {
+        let (app, dir) = mkapp("typed", "10.12.0.10");
+        post(&app, "/new", "alice", false, Some(ORIGIN), "name=git&url=https%3A%2F%2Fgit.example%2F").await;
+        post(&app, "/new", "alice", false, Some(ORIGIN), "name=w&url=https%3A%2F%2Fwiki.example%2Fsearch%3Fterm%3D%25s").await;
+        let loc = |p: &'static str| {
+            let app = app.clone();
+            async move { location(&get(&app, p, Some("bob")).await.1).to_string() }
+        };
+        assert_eq!(loc("/git%2Finfra%2Foci-images").await, "https://git.example/infra/oci-images");
+        assert_eq!(loc("/GIT%2Finfra%2Fx%3Ftab%3D1").await, "https://git.example/infra/x?tab=1");
+        assert_eq!(loc("/w%20kanidm%20reauth").await, "https://wiki.example/search?term=kanidm%20reauth");
+        assert_eq!(loc("/w%2Fkanidm").await, "https://wiki.example/search?term=kanidm");
+        assert_eq!(loc("/git%2Fa%20b%3Cc").await, "https://git.example/a%20b%3Cc");
+        // a plain path keeps its own encoding untouched
+        assert_eq!(loc("/git/a%2Fb").await, "https://git.example/a%2Fb");
+        assert_eq!(loc("/nothing%2Fhere").await, "/edit/nothing");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
