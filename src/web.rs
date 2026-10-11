@@ -31,6 +31,21 @@ pub struct AppState {
     pub store: Arc<Store>,
     pub auth: Arc<Auth>,
     pub public_origin: Arc<str>,
+    /// who to ask for access (the "not a member" page)
+    pub help: Arc<str>,
+    /// Cache-Control for a known name's redirect: "private, max-age=N", or no-store when N is 0
+    redirect_cache: HeaderValue,
+}
+
+impl AppState {
+    pub fn new(store: Arc<Store>, auth: Arc<Auth>, public_origin: &str, help: &str, redirect_cache_secs: u64) -> Self {
+        let redirect_cache = if redirect_cache_secs == 0 {
+            HeaderValue::from_static("private, no-store")
+        } else {
+            HeaderValue::from_str(&format!("private, max-age={redirect_cache_secs}")).expect("ascii")
+        };
+        Self { store, auth, public_origin: public_origin.into(), help: help.into(), redirect_cache }
+    }
 }
 
 /// Names the app's own pages use (and /oauth2, /logout, which Caddy's gate answers before us).
@@ -179,11 +194,16 @@ async fn go(State(state): State<AppState>, _user: User, method: Method, uri: Uri
         Some(entry) => {
             entry.hit();
             metrics::REDIRECTS.inc();
-            redirect(StatusCode::TEMPORARY_REDIRECT, &expand(&entry.link.url, rest, query))
+            let mut r = redirect(StatusCode::TEMPORARY_REDIRECT, &expand(&entry.link.url, rest, query));
+            r.headers_mut().insert(CACHE_CONTROL, state.redirect_cache.clone());
+            r
         }
         None => {
             metrics::MISSES.inc();
-            redirect(StatusCode::TEMPORARY_REDIRECT, &format!("/edit/{keyword}"))
+            // never cached: once someone creates the name, the next visit must see it
+            let mut r = redirect(StatusCode::TEMPORARY_REDIRECT, &format!("/edit/{keyword}"));
+            r.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+            r
         }
     }
 }
@@ -209,16 +229,16 @@ struct Message<'a> {
     body: &'a str,
 }
 
-/// The 403 for requests without a believable gate identity.
-pub struct Denied(pub Why);
+/// The 403 for requests without a believable gate identity: why, who to ask (LINKSHRINK_HELP), the public origin.
+pub struct Denied(pub Why, pub Arc<str>, pub Arc<str>);
 
 impl IntoResponse for Denied {
     fn into_response(self) -> Response {
-        let body = match self.0 {
-            Why::NotMember => "You're signed in, but go links are for members. Ask an admin (help@wupinyin.co.uk).",
-            _ => "Sign in through https://go.wupinyin.co.uk to use go links.",
+        let (title, body) = match self.0 {
+            Why::NotMember => ("Not a member", format!("You're signed in, but go links are for members. {}", self.1)),
+            _ => ("Not signed in", format!("Sign in through {} to use go links.", self.2)),
         };
-        page(StatusCode::FORBIDDEN, &Message { title: "Not signed in", body })
+        page(StatusCode::FORBIDDEN, &Message { title, body: &body })
     }
 }
 
@@ -719,12 +739,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("linkshrink-web-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let state = AppState { store: Arc::new(Store::open(&dir.join("links.db")).unwrap()),
-                               auth: Arc::new(Auth::new("10.12.0.10".parse().unwrap(),
-                                                        crate::secretfile::SecretFile::fixed(SECRET.as_bytes()),
-                                                        Some("welcome-users".into()),
-                                                        "infra-admins".into())),
-                               public_origin: ORIGIN.into() };
+        let auth = Arc::new(Auth::new("10.12.0.10".parse().unwrap(),
+                                      crate::secretfile::SecretFile::fixed(SECRET.as_bytes()),
+                                      Some("welcome-users".into()),
+                                      "infra-admins".into()));
+        let state = AppState::new(Arc::new(Store::open(&dir.join("links.db")).unwrap()), auth, ORIGIN, "Ask help@.", 60);
         let peer: SocketAddr = format!("{peer}:40000").parse().unwrap();
         (router(state).layer(MockConnectInfo(peer)), dir)
     }
@@ -1019,6 +1038,25 @@ mod tests {
         assert_eq!(s, StatusCode::OK);
         assert!(body.contains("linkshrink_redirects_total"));
         let _ = (std::fs::remove_dir_all(d1), std::fs::remove_dir_all(d2));
+    }
+
+    #[tokio::test]
+    async fn redirect_caching_and_denied_texts() {
+        let (app, dir) = mkapp("cache", "10.12.0.10");
+        post(&app, "/new", "alice", false, Some(ORIGIN), "name=wiki&url=https%3A%2F%2Fwiki.example%2F").await;
+        let (_, h, _) = get(&app, "/wiki", Some("bob")).await;
+        assert_eq!(h.get(CACHE_CONTROL).unwrap(), "private, max-age=60");
+        let (_, h, _) = get(&app, "/not-yet", Some("bob")).await;
+        assert_eq!(h.get(CACHE_CONTROL).unwrap(), "private, no-store", "a create-page redirect is never cached");
+        let (_, _, body) = get(&app, "/", None).await;
+        assert!(body.contains("Sign in through https://go.wupinyin.co.uk"));
+        let r = Request::get("/").header("x-gate-auth", SECRET)
+                                 .header("x-auth-request-preferred-username", "eve")
+                                 .header("x-auth-request-groups", "residents")
+                                 .body(Body::empty())
+                                 .unwrap();
+        assert!(send(&app, r).await.2.contains("Ask help@."));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[tokio::test]

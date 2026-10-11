@@ -1,6 +1,6 @@
-//! linkshrink: go/ links for wupinyin.co.uk. Originally by d0nut and goproslowyo (2022-23, axum + Redis);
-//! rewritten for kvm-vps in 2026 (SQLite, the Kanidm gate, OCI app) with the same idea at its core: every link in
-//! memory, redirects never wait on storage.
+//! linkshrink: go/ links. Originally by d0nut and goproslowyo (2022-23, axum + Redis); rewritten in 2026 for
+//! wupinyin.co.uk (SQLite, identity from a trusted sign-in proxy) with the same idea at its core: every link in memory,
+//! redirects never wait on storage.
 //!
 //!   linkshrink              serve (settings: see config.rs)
 //!   linkshrink healthcheck  GET /healthz on LINKSHRINK_LISTEN, exit 0 when it answers 200 (deploys, fire-drill)
@@ -64,11 +64,12 @@ async fn serve(cfg: Config) -> Result<(), String> {
     let store = Arc::new(Store::open(&cfg.db).map_err(|e| format!("opening {}: {e}", cfg.db.display()))?);
     let secret = secretfile::SecretFile::open(&cfg.gate_secret_file, Duration::from_secs(1))?;
     let auth = Arc::new(Auth::new(cfg.trusted_proxy, secret, cfg.user_group.clone(), cfg.admin_group.clone()));
-    let state = AppState { store: store.clone(), auth, public_origin: cfg.public_origin.clone().into() };
+    let state = AppState::new(store.clone(), auth, &cfg.public_origin, &cfg.help, cfg.redirect_cache_secs);
 
     let listener = tokio::net::TcpListener::bind(cfg.listen).await.map_err(|e| format!("listen {}: {e}", cfg.listen))?;
     info!(listen = %cfg.listen, trusted_proxy = %cfg.trusted_proxy, user_group = ?cfg.user_group,
-          admin_group = %cfg.admin_group, origin = %cfg.public_origin, "linkshrink listening");
+          admin_group = %cfg.admin_group, origin = %cfg.public_origin, redirect_cache_secs = cfg.redirect_cache_secs,
+          "linkshrink listening");
 
     store::tick();
     let clock = tokio::spawn(async {

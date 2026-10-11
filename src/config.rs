@@ -15,10 +15,17 @@ pub struct Config {
     pub gate_secret_file: PathBuf,
     /// LINKSHRINK_USER_GROUP: when set, a signed-in person must also be in this Kanidm group.
     pub user_group: Option<String>,
-    /// LINKSHRINK_ADMIN_GROUP, default infra-admins: may edit and delete every link.
+    /// LINKSHRINK_ADMIN_GROUP, default admins: may edit and delete every link and sees every hidden link.
     pub admin_group: String,
-    /// LINKSHRINK_PUBLIC_ORIGIN, default https://go.wupinyin.co.uk: the only Origin a form POST may come from.
+    /// LINKSHRINK_PUBLIC_ORIGIN (required), e.g. https://go.example.com: the only Origin a form POST may come from, and
+    /// the base of the links people copy.
     pub public_origin: String,
+    /// LINKSHRINK_HELP: shown to signed-in people who aren't in LINKSHRINK_USER_GROUP (who to ask for access).
+    pub help: String,
+    /// LINKSHRINK_REDIRECT_CACHE_SECS, default 0: let browsers keep a redirect for this long (Cache-Control: private,
+    /// max-age). Repeat visits then skip the network; an edit reaches such a browser up to this late, and its repeat
+    /// visits aren't counted as hits. 0 = never cached.
+    pub redirect_cache_secs: u64,
     /// LINKSHRINK_FLUSH_SECS, default 5: how often hit counts are written to the database.
     pub flush_every: Duration,
 }
@@ -38,6 +45,14 @@ impl Config {
 
         let secret_file = var("LINKSHRINK_GATE_SECRET_FILE").ok_or("LINKSHRINK_GATE_SECRET_FILE is required")?;
 
+        let public_origin = var("LINKSHRINK_PUBLIC_ORIGIN").ok_or("LINKSHRINK_PUBLIC_ORIGIN is required (e.g. https://go.example.com)")?;
+        let public_origin = public_origin.trim_end_matches('/').to_string();
+        if !(public_origin.starts_with("https://") || public_origin.starts_with("http://")) {
+            return Err(format!("LINKSHRINK_PUBLIC_ORIGIN {public_origin:?} must start with https:// or http://"));
+        }
+        let cache = var("LINKSHRINK_REDIRECT_CACHE_SECS").unwrap_or_else(|| "0".into());
+        let redirect_cache_secs: u64 = cache.parse().map_err(|e| format!("LINKSHRINK_REDIRECT_CACHE_SECS {cache:?}: {e}"))?;
+
         let flush_secs = var("LINKSHRINK_FLUSH_SECS").unwrap_or_else(|| "5".into());
         let flush_secs: u64 = flush_secs.parse().map_err(|e| format!("LINKSHRINK_FLUSH_SECS {flush_secs:?}: {e}"))?;
 
@@ -46,10 +61,10 @@ impl Config {
                   trusted_proxy,
                   gate_secret_file: secret_file.into(),
                   user_group: var("LINKSHRINK_USER_GROUP"),
-                  admin_group: var("LINKSHRINK_ADMIN_GROUP").unwrap_or_else(|| "infra-admins".into()),
-                  public_origin: var("LINKSHRINK_PUBLIC_ORIGIN").unwrap_or_else(|| "https://go.wupinyin.co.uk".into())
-                                                                .trim_end_matches('/')
-                                                                .to_string(),
+                  admin_group: var("LINKSHRINK_ADMIN_GROUP").unwrap_or_else(|| "admins".into()),
+                  public_origin,
+                  help: var("LINKSHRINK_HELP").unwrap_or_else(|| "Ask an admin for access.".into()),
+                  redirect_cache_secs,
                   flush_every: Duration::from_secs(flush_secs.max(1)) })
     }
 }

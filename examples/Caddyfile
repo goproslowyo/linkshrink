@@ -1,0 +1,38 @@
+# linkshrink behind Caddy + oauth2-proxy (any OIDC provider). Caddy signs people in through oauth2-proxy's
+# /oauth2/auth and passes who they are to linkshrink, with a shared secret so linkshrink knows the headers came
+# from Caddy. Replace the hostnames, addresses and group. The secret file holds one line (or "current\nprevious"
+# while you rotate it); give linkshrink the same file as LINKSHRINK_GATE_SECRET_FILE.
+go.example.com {
+	# never let a client send these itself
+	request_header -X-Auth-Request-User
+	request_header -X-Auth-Request-Preferred-Username
+	request_header -X-Auth-Request-Groups
+
+	handle /healthz {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle /metrics {
+		respond 404
+	}
+	handle /oauth2/* {
+		reverse_proxy 127.0.0.1:4180
+	}
+	handle {
+		forward_auth 127.0.0.1:4180 {
+			uri /oauth2/auth?allowed_groups=go-users
+			copy_headers X-Auth-Request-User X-Auth-Request-Preferred-Username X-Auth-Request-Groups
+			@unauth status 401
+			handle_response @unauth {
+				redir * /oauth2/sign_in?rd={scheme}://{host}{uri} 302
+			}
+		}
+		reverse_proxy 127.0.0.1:8080 {
+			header_up X-Gate-Auth {file./etc/caddy/gate-secret}
+		}
+	}
+}
+
+# Optional: with "example.com" as a DNS search domain on your devices, typing go/foo reaches this.
+http://go {
+	redir https://go.example.com{uri} 302
+}

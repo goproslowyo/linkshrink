@@ -130,7 +130,7 @@ impl FromRequestParts<AppState> for User {
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         state.auth.identify(peer(parts), &parts.headers).map_err(|why| {
                                                             metrics::DENIED.inc();
-                                                            Denied(why)
+                                                            Denied(why, state.help.clone(), state.public_origin.clone())
                                                         })
     }
 }
