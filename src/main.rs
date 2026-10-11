@@ -70,11 +70,21 @@ async fn serve(cfg: Config) -> Result<(), String> {
     info!(listen = %cfg.listen, trusted_proxy = %cfg.trusted_proxy, user_group = ?cfg.user_group,
           admin_group = %cfg.admin_group, origin = %cfg.public_origin, "linkshrink listening");
 
+    store::tick();
+    let clock = tokio::spawn(async {
+        // the coarse clock "last used" reads on every redirect (store::tick)
+        let mut every = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            every.tick().await;
+            store::tick();
+        }
+    });
     let background = tokio::spawn(background(store.clone(), cfg.flush_every));
     let app = web::router(state).into_make_service_with_connect_info::<SocketAddr>();
     let served = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()).await;
 
     background.abort();
+    clock.abort();
     final_save(&store).await;
     served.map_err(|e| format!("server: {e}"))
 }

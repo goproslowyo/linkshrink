@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}all go/ links{% endblock %}
+{% block script %}<script src="/static/app.js?v={{ v }}" defer></script>{% endblock %}
+{% block who %}<nav><a href="/">new link</a> · {{ user.name }}{% if user.admin %} (admin){% endif %} · <a href="/logout">sign out</a></nav>{% endblock %}
+{% block content %}
+<form class="filter" method="get" action="/links">
+  <input id="q" name="q" value="{{ q }}" placeholder="filter: name, words, URL or owner  ( / )" spellcheck="false" autocapitalize="off" autocomplete="off">
+  <input type="hidden" name="sort" value="{{ sort }}">{% if mine %}<input type="hidden" name="mine" value="1">{% endif %}
+</form>
+<p class="sorts">
+  {% if mine %}<a href="/links?sort={{ sort }}">everyone's</a> · <b>mine</b>{% else %}<b>everyone's</b> · <a href="/links?sort={{ sort }}&amp;mine=1">mine</a>{% endif %}
+  &nbsp;|&nbsp; sort:
+  {% if sort == "hits" %}<b>most used</b>{% else %}<a href="/links?sort=hits{% if mine %}&amp;mine=1{% endif %}{% if !q.is_empty() %}&amp;q={{ q }}{% endif %}">most used</a>{% endif %} · {% if sort == "recent" %}<b>recently used</b>{% else %}<a href="/links?sort=recent{% if mine %}&amp;mine=1{% endif %}{% if !q.is_empty() %}&amp;q={{ q }}{% endif %}">recently used</a>{% endif %} · {% if sort == "stale" %}<b>stale first</b>{% else %}<a href="/links?sort=stale{% if mine %}&amp;mine=1{% endif %}{% if !q.is_empty() %}&amp;q={{ q }}{% endif %}">stale first</a>{% endif %} · {% if sort == "name" %}<b>name</b>{% else %}<a href="/links?sort=name{% if mine %}&amp;mine=1{% endif %}{% if !q.is_empty() %}&amp;q={{ q }}{% endif %}">name</a>{% endif %}
+  &nbsp;|&nbsp; {{ rows.len() }} of {{ total }}
+</p>
+<table class="links">
+  <thead><tr><th>Link</th><th>Goes to</th><th>Owner</th><th class="num">Hits</th><th>Last used</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr{% if r.private %} class="hidden"{% endif %}>
+    <td class="name"><a href="/{{ r.keyword }}">go/{{ r.keyword }}</a>{% if r.generated %} <span class="tag">short</span>{% endif %}{% if r.private %} <span class="tag hidden" title="Hidden: only its owner and admins see it in the list">hidden{% if !r.mine %} · {{ r.owner }}'s{% endif %}</span>{% endif %}{% if r.can_edit %} <a class="edit" href="/edit/{{ r.keyword }}">edit</a>{% endif %}
+      {% if !r.aliases.is_empty() %}<div class="muted">also {{ r.aliases }}</div>{% endif %}
+      {% if !r.description.is_empty() %}<div class="muted">{{ r.description }}</div>{% endif %}</td>
+    <td class="url"><a href="{{ r.url }}">{{ r.url }}</a></td>
+    <td class="owner">{{ r.owner }}</td>
+    <td class="num"><span>{{ r.hits }}</span></td>
+    <td class="when">{{ r.last_used }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

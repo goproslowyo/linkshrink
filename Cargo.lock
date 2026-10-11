@@ -101,6 +101,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
+ "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
  "sync_wrapper",
@@ -513,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "linkshrink"
-version = "0.2.0"
+version = "0.3.2"
 dependencies = [
  "arc-swap",
  "askama",
@@ -522,6 +523,7 @@ dependencies = [
  "mimalloc",
  "rusqlite",
  "serde",
+ "serde_json",
  "subtle",
  "tokio",
  "tower",

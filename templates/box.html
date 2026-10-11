@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{% if name.is_empty() %}go/{% else %}go/{{ name }}{% endif %}{% endblock %}
+{% block script %}<script src="/static/app.js?v={{ v }}" defer></script>{% endblock %}
+{% block who %}<nav><a href="/links">all links</a> · {{ user.name }}{% if user.admin %} (admin){% endif %} · <a href="/logout">sign out</a></nav>{% endblock %}
+{% block content %}
+<section class="hero{% if link.is_some() %} compact{% endif %}">
+{% if can_edit %}
+<form id="box" class="box" method="post" action="/new" autocomplete="off">
+  <div class="bar">
+    <label class="go" for="name">go/</label>
+    <input id="name" name="name" value="{{ name }}" placeholder="name" spellcheck="false" autocapitalize="off" autocomplete="off"{% if name.is_empty() %} autofocus{% endif %}>
+    <input id="url" name="url" value="{{ url }}" placeholder="paste the link, press ⏎" spellcheck="false" autocapitalize="off" autocomplete="off"{% if !name.is_empty() %} autofocus{% endif %}>
+    <button class="save" title="save">⏎</button>
+  </div>
+  <div id="drawer" class="drawer{% if saved %} open ok{% endif %}" aria-live="polite">{% if saved %}<a id="copy" href="{{ origin }}/{{ name }}">{{ origin }}/{{ name }}</a><span class="hint">Ctrl+C / ⌘C to copy</span>{% match link %}{% when Some with (l) %}{% if l.private %}<span class="note"><span class="tag hidden">hidden</span> only you and admins see it in the list</span>{% endif %}{% when None %}{% endmatch %}{% endif %}</div>
+  <p class="keys">name <kbd>⏎</kbd> paste the link <kbd>⏎</kbd> &nbsp;·&nbsp; paste a link first for a short name &nbsp;·&nbsp; <kbd>Esc</kbd> back &nbsp;·&nbsp; <kbd>/</kbd> jump here</p>
+</form>
+{% else %}
+<div class="box readonly">
+  <div class="bar"><span class="go">go/</span><span class="ro-name">{{ name }}</span><a class="ro-url" href="{{ url }}">{{ url }}</a></div>
+  {% match link %}{% when Some with (l) %}<p class="keys">{{ l.owner }}'s link: only {{ l.owner }} or an admin can change it.</p>{% when None %}{% endmatch %}
+</div>
+{% endif %}
+</section>
+{% match link %}
+{% when Some with (l) %}
+<section class="details">
+  <p class="facts">owner {{ l.owner }} · {{ l.hits }} hits · last used {{ l.last_used }} · since {{ l.created }}{% if l.generated %} · short link{% endif %}{% if l.private %} · <span class="tag hidden" title="Hidden: only its owner and admins see it in the list. Anyone who knows the name can still use it.">hidden</span>{% endif %}</p>
+  {% if can_edit %}
+  <form method="post" action="/edit/{{ name }}" class="more">
+    <input type="hidden" name="action" value="save">
+    <input type="hidden" name="url" value="{{ url }}">
+    <label for="description">Description</label>
+    <textarea id="description" name="description" maxlength="500" placeholder="what it is, for the list">{{ l.description }}</textarea>
+    <label class="check"><input type="checkbox" name="private" value="1"{% if l.private %} checked{% endif %}> Hidden: only you and admins see it in the list (anyone who knows the name can still use it)</label>
+    {% if user.admin %}<label for="owner">Owner (admins can hand a link over)</label><input id="owner" name="owner" value="{{ l.owner }}">{% endif %}
+    <button>Save details</button>
+  </form>
+  <div class="aliases">
+    <span class="label">Also known as</span>
+    {% for a in l.aliases %}<form method="post" action="/edit/{{ name }}" class="chip"><input type="hidden" name="action" value="alias_remove"><input type="hidden" name="alias" value="{{ a }}"><a href="/{{ a }}">go/{{ a }}</a><button title="remove go/{{ a }}">×</button></form>{% endfor %}
+    <form method="post" action="/edit/{{ name }}" class="chip add"><input type="hidden" name="action" value="alias_add"><input name="alias" placeholder="another name" spellcheck="false" autocapitalize="off" autocomplete="off"><button>add</button></form>
+  </div>
+  <form method="post" action="/edit/{{ name }}" class="danger-zone" data-confirm="Delete go/{{ name }}{% if !l.aliases.is_empty() %} and its other names{% endif %}?"><input type="hidden" name="action" value="delete"><button class="danger">Delete go/{{ name }}</button></form>
+  {% else %}
+  {% if !l.description.is_empty() %}<p>{{ l.description }}</p>{% endif %}
+  {% if !l.aliases.is_empty() %}<p class="facts">also {% for a in l.aliases %}<a href="/{{ a }}">go/{{ a }}</a> {% endfor %}</p>{% endif %}
+  {% endif %}
+  {% if !l.history.is_empty() %}
+  <details>
+    <summary>History</summary>
+    <table>
+      <thead><tr><th>When</th><th>Who</th><th>What</th><th>URL</th><th>Owner</th></tr></thead>
+      <tbody>
+      {% for h in l.history %}<tr><td>{{ h.when }}</td><td>{{ h.actor }}</td><td>{{ h.action }}</td><td class="url">{{ h.url }}</td><td>{{ h.owner }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endif %}
+</section>
+{% when None %}
+{% endmatch %}
+{% endblock %}
